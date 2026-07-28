@@ -11,3 +11,14 @@ The result is then to be exported as a new PDF file.
 ## Extra task:
 As an extra feature, you could also let users choose which colour to apply to the whole thing. In addition, test point numbers can also be imported via
 the text file and added to the respective network.
+
+
+## Note to self:
+- add a requirements.txt, LICENSE
+
+## Commands
+init:
+    pip install -r requirements.txt
+
+test:
+    py.test tests
