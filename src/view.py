@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 from tkinter.scrolledtext import ScrolledText
 from typing import List, Optional, Tuple
+from .information_panel import InfoWindow
 
 
 class HighlighterView(tk.Tk):
@@ -37,7 +38,27 @@ class HighlighterView(tk.Tk):
 
         @param parent Parent Tkinter widget container.
         """
-        files_frame = ttk.LabelFrame(parent, text=" Files ", padding="10")
+        # Create a container frame for the LabelFrame title + info icon
+        title_container = ttk.Frame(parent)
+        
+        ttk.Label(
+            title_container, 
+            text="Files Selection", 
+            font=("TkDefaultFont", 9, "bold")
+        ).pack(side=tk.LEFT)
+
+        # Subtle, modern circular icon button
+        self.info_btn = tk.Label(
+            title_container,
+            text=" ⓘ ",
+            font=("TkDefaultFont", 10, "bold"),
+            foreground="#0078d4",
+            cursor="hand2"
+        )
+        self.info_btn.pack(side=tk.LEFT)
+
+        # Pass title_container directly as the LabelFrame's labelwidget
+        files_frame = ttk.LabelFrame(parent, labelwidget=title_container, padding="10")
         files_frame.pack(fill=tk.X, pady=(0, 10))
         files_frame.columnconfigure(1, weight=1)
 
@@ -60,6 +81,12 @@ class HighlighterView(tk.Tk):
         )
         self.browse_txt_btn = ttk.Button(files_frame, text="Browse...")
         self.browse_txt_btn.grid(row=1, column=2, pady=5)
+
+    def show_info_window(self) -> InfoWindow:
+        """!
+        @brief Spawns and returns the file format info window.
+        """
+        return InfoWindow(self)
 
     def _create_controls_frame(self, parent: ttk.Frame) -> None:
         """!
@@ -86,8 +113,14 @@ class HighlighterView(tk.Tk):
 
         @param parent Parent Tkinter widget container.
         """
+        log_title = ttk.Label(
+            parent,
+            text=" Status / Error Log ",
+            font=("TkDefaultFont", 9, "bold")
+        )
+
         log_frame = ttk.LabelFrame(
-            parent, text=" Status / Error Log ", padding="5"
+            parent, labelwidget=log_title, padding="5"
         )
         log_frame.pack(fill=tk.BOTH, expand=True)
 

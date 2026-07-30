@@ -28,7 +28,8 @@ class HighlighterController:
         self.view.browse_pdf_btn.config(command=self.handle_browse_pdf)
         self.view.browse_txt_btn.config(command=self.handle_browse_txt)
         self.view.go_btn.config(command=self.handle_go)
-
+        self.view.info_btn.bind("<Button-1>", lambda event: self.handle_show_info())
+    
     def handle_browse_pdf(self) -> None:
         """!
         @brief Opens the PDF file dialog and updates the model and view state with the selection.
@@ -69,15 +70,20 @@ class HighlighterController:
 
         def run_process():
             try:
-                success, result_msg = self.model.process_pdf()
+                success, result_msg = self.model.process_pdf(add_points_number=self.model.include_test_points)
                 self.view.after(
                     0, lambda: self.view.log_message(result_msg, is_error=not success)
                 )
             except Exception as e:
-                self.view.after(
-                    0, lambda: self.view.log_message(f"An error occurred: {str(e)}", is_error=True)
-                )
+                error_msg = f"An error occurred: {str(e)}"
+                self.view.after(0, lambda: self.view.log_message(error_msg, is_error=True))
             finally:
                 self.view.after(0, lambda: self.view.go_btn.config(state="normal"))
 
         threading.Thread(target=run_process, daemon=True).start()
+
+    def handle_show_info(self) -> None:
+        """!
+        @brief Handles user clicking the info button by triggering the view popup.
+        """
+        info_win = self.view.show_info_window()

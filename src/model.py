@@ -4,8 +4,7 @@ from typing import Dict, List, Tuple
 import fitz
 
 VALID_BOUNDARIES = set("\n\t\r ()[]{}<>\"")
-DEFAULT_HIGHLIGHT_COLOR = (0.0, 1.0, 0.0)  # Pure Green (RGB)
-
+DEFAULT_HIGHLIGHT_COLOR = (0.0, 1.0, 0.0) 
 
 @dataclass(slots=True)
 class HighlightReport:
@@ -15,7 +14,6 @@ class HighlightReport:
     counts: Dict[str, int] = field(default_factory=dict)
     unmatched_counts: int = 0
     unmatched_details: List[str] = field(default_factory=list)
-
 
 class HighlighterModel:
     """!
@@ -51,19 +49,65 @@ class HighlighterModel:
 
         return True, ""
 
-    def load_and_clean_nets(self, txt_path: Path) -> List[str]:
+    def load_and_clean_nets(
+        self, txt_path: Path, add_points_number: bool = False
+    ) -> Tuple[Dict[str, int], List[str]]:
         """!
         @brief Reads net names from a text file, removes duplicates, and sorts them by length.
 
         @param txt_path File path to the network names text file.
-        @return Unique net names sorted in descending order of character length.
+        @param add_points_number Flag indicating whether to include test point numbers in the search.
+        @return A tuple of (points_number, nets), where points_number is a dictionary mapping point names to test point numbers,
+                and nets is a list of unique net names sorted in descending order of character length.
+        @raises ValueError If a line fails to follow the expected format.
         """
-        nets = {
-            line.strip()
-            for line in txt_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        }
-        return sorted(nets, key=len, reverse=True)
+        points_number: Dict[str, int] = {}
+        raw_nets: List[str] = []
+
+        lines = txt_path.read_text(encoding="utf-8").splitlines()
+
+        for line_idx, raw_line in enumerate(lines, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            if not add_points_number:
+                if ";" in line:
+                    raise ValueError(
+                        f"Format error on line {line_idx} in '{txt_path.name}': "
+                        f"Unexpected semicolon found in '{line}'. "
+                        "Expected only network names when add_points_number=False."
+                    )
+                raw_nets.append(line)
+
+            else:
+                if ";" not in line:
+                    raise ValueError(
+                        f"Format error on line {line_idx} in '{txt_path.name}': "
+                        f"Missing ';' separator in '{line}'. Expected format 'network name;point number'."
+                    )
+
+                net, pt = line.rsplit(";", 1)
+                net, pt = net.strip(), pt.strip()
+
+                if not net:
+                    raise ValueError(
+                        f"Format error on line {line_idx} in '{txt_path.name}': "
+                        f"Net name cannot be empty."
+                    )
+
+                if not pt.isdigit():
+                    raise ValueError(
+                        f"Format error on line {line_idx} in '{txt_path.name}': "
+                        f"Point number must be a digit, got '{pt}'."
+                    )
+
+                raw_nets.append(net)
+                points_number[net] = int(pt)
+
+        unique_nets = list(set(raw_nets))
+
+        return points_number, sorted(unique_nets, key=len, reverse=True)
 
     @staticmethod
     def is_valid_boundary(char: str) -> bool:
@@ -143,9 +187,11 @@ class HighlighterModel:
                 if match_found:
                     break
 
-    def process_pdf(self) -> Tuple[bool, str]:
+    def process_pdf(self, add_points_number: bool = False) -> Tuple[bool, str]:
         """!
         @brief Executes the net highlighting pipeline on the configured PDF.
+
+        @param add_points_number Flag indicating whether to include test point numbers in the search, default is False.
 
         @return A tuple of (success_flag, summary_log_message).
         """
@@ -153,7 +199,9 @@ class HighlighterModel:
         txt_path = Path(self.txt_path)
         output_pdf = input_pdf.with_name(f"{input_pdf.stem}_highlighted{input_pdf.suffix}")
 
-        target_nets = self.load_and_clean_nets(txt_path)
+        # --- FIX HERE: Unpack both points_number AND target_nets ---
+        points_number, target_nets = self.load_and_clean_nets(txt_path, add_points_number=add_points_number)
+        
         if not target_nets:
             return False, "No valid net names found in the text file."
 
