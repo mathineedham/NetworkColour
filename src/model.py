@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 import fitz
 
-VALID_BOUNDARIES = set("\n\t\r ()[]{}<>\"")
+VALID_BOUNDARIES = set("\n\t\r ()[]{}<>\",")
 DEFAULT_HIGHLIGHT_COLOR = (0.0, 1.0, 0.0) 
 
 @dataclass(slots=True)
@@ -72,7 +72,9 @@ class HighlighterModel:
                 continue
 
             if not add_points_number:
-                if ";" in line:
+                forbidden_chars = VALID_BOUNDARIES | {";"}
+                found_invalid = [char for char in line if char in forbidden_chars]
+                if found_invalid:
                     raise ValueError(
                         f"Format error on line {line_idx} in '{txt_path.name}': "
                         f"Unexpected semicolon found in '{line}'. "
@@ -84,9 +86,8 @@ class HighlighterModel:
                 if ";" not in line:
                     raise ValueError(
                         f"Format error on line {line_idx} in '{txt_path.name}': "
-                        f"Missing ';' separator in '{line}'. Expected format 'network name;point number'."
+                        f"Missing ';' separator in '{line}'. Expected format 'net_name;point_number'."
                     )
-
                 net, pt = line.rsplit(";", 1)
                 net, pt = net.strip(), pt.strip()
 
@@ -94,6 +95,14 @@ class HighlighterModel:
                     raise ValueError(
                         f"Format error on line {line_idx} in '{txt_path.name}': "
                         f"Net name cannot be empty."
+                    )
+
+                forbidden_chars = VALID_BOUNDARIES | {";", ","}
+                found_invalid = [char for char in net if char in forbidden_chars]
+                if found_invalid:
+                    raise ValueError(
+                        f"Format error on line {line_idx} in '{txt_path.name}': "
+                        f"Invalid character '{found_invalid[0]}' found in net name '{net}'."
                     )
 
                 if not pt.isdigit():
@@ -106,8 +115,10 @@ class HighlighterModel:
                 points_number[net] = int(pt)
 
         unique_nets = list(set(raw_nets))
+        unique_nets.sort()
+        unique_nets.sort(key=len, reverse=True)
 
-        return points_number, sorted(unique_nets, key=len, reverse=True)
+        return points_number, unique_nets
 
     @staticmethod
     def is_valid_boundary(char: str) -> bool:
