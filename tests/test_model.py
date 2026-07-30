@@ -81,12 +81,92 @@ class TestHighlighterModel(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.model.load_and_clean_nets(txt_file, add_points_number=True)
 
+    # Tests for 'validate_inputs' 
 
-    def test_validate_inputs_empty(self):
-        """Test validation fails when file paths are missing."""
+    def test_validate_inputs_both_missing(self):
+        """Test validation fails when both paths are empty or None."""
+        self.model.pdf_path = ""
+        self.model.txt_path = ""
         is_valid, msg = self.model.validate_inputs()
         self.assertFalse(is_valid)
-        self.assertIn("Please select", msg)
+        self.assertEqual(msg, "Please select a PDF file.")
+
+    def test_validate_inputs_whitespace_only(self):
+        """Test validation fails when paths contain only spaces."""
+        self.model.pdf_path = "   "
+        self.model.txt_path = "   "
+        is_valid, msg = self.model.validate_inputs()
+        self.assertFalse(is_valid)
+        self.assertEqual(msg, "Please select a PDF file.")
+
+    def test_validate_inputs_txt_missing(self):
+        """Test validation fails when only txt_path is missing."""
+        pdf_file = self.temp_path / "doc.pdf"
+        pdf_file.touch()
+
+        self.model.pdf_path = str(pdf_file)
+        self.model.txt_path = ""
+        is_valid, msg = self.model.validate_inputs()
+        self.assertFalse(is_valid)
+        self.assertEqual(msg, "Please select a .txt file containing network names.")
+
+    def test_validate_inputs_pdf_file_not_found(self):
+        """Test validation fails when PDF path points to non-existent file."""
+        self.model.pdf_path = str(self.temp_path / "non_existent.pdf")
+        self.model.txt_path = str(self.temp_path / "dummy.txt")
+        is_valid, msg = self.model.validate_inputs()
+        self.assertFalse(is_valid)
+        self.assertIn("PDF file not found", msg)
+
+    def test_validate_inputs_txt_file_not_found(self):
+        """Test validation fails when TXT path points to non-existent file."""
+        pdf_file = self.temp_path / "doc.pdf"
+        pdf_file.touch()
+
+        self.model.pdf_path = str(pdf_file)
+        self.model.txt_path = str(self.temp_path / "non_existent.txt")
+        is_valid, msg = self.model.validate_inputs()
+        self.assertFalse(is_valid)
+        self.assertIn("Text file not found", msg)
+
+    def test_validate_inputs_invalid_pdf_extension(self):
+        """Test validation fails when PDF file does not end in .pdf (e.g., pasted path)."""
+        wrong_pdf = self.temp_path / "doc.docx"
+        wrong_pdf.touch()
+        txt_file = self.temp_path / "nets.txt"
+        txt_file.touch()
+
+        self.model.pdf_path = str(wrong_pdf)
+        self.model.txt_path = str(txt_file)
+        is_valid, msg = self.model.validate_inputs()
+        self.assertFalse(is_valid)
+        self.assertIn("must have a .pdf extension", msg)
+
+    def test_validate_inputs_invalid_txt_extension(self):
+        """Test validation fails when TXT file does not end in .txt (e.g., pasted path)."""
+        pdf_file = self.temp_path / "doc.pdf"
+        pdf_file.touch()
+        wrong_txt = self.temp_path / "nets.csv"
+        wrong_txt.touch()
+
+        self.model.pdf_path = str(pdf_file)
+        self.model.txt_path = str(wrong_txt)
+        is_valid, msg = self.model.validate_inputs()
+        self.assertFalse(is_valid)
+        self.assertIn("must have a .txt extension", msg)
+
+    def test_validate_inputs_success(self):
+        """Test validation succeeds when both files exist with correct extensions."""
+        pdf_file = self.temp_path / "sample.pdf"
+        pdf_file.touch()
+        txt_file = self.temp_path / "nets.txt"
+        txt_file.touch()
+
+        self.model.pdf_path = str(pdf_file)
+        self.model.txt_path = str(txt_file)
+        is_valid, msg = self.model.validate_inputs()
+        self.assertTrue(is_valid)
+        self.assertEqual(msg, "")
 
 
 if __name__ == "__main__":

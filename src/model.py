@@ -34,18 +34,26 @@ class HighlighterModel:
 
         @return A tuple of (is_valid, error_message).
         """
-        if not self.pdf_path:
+        pdf_str = (self.pdf_path or "").strip()
+        txt_str = (self.txt_path or "").strip()
+
+        if not pdf_str:
             return False, "Please select a PDF file."
-        if not self.txt_path:
+        if not txt_str:
             return False, "Please select a .txt file containing network names."
 
-        pdf = Path(self.pdf_path)
-        txt = Path(self.txt_path)
+        pdf = Path(pdf_str)
+        txt = Path(txt_str)
 
         if not pdf.is_file():
-            return False, f"PDF file not found: {self.pdf_path}"
+            return False, f"PDF file not found: {pdf_str}"
         if not txt.is_file():
-            return False, f"Text file not found: {self.txt_path}"
+            return False, f"Text file not found: {txt_str}"
+
+        if pdf.suffix.lower() != ".pdf":
+            return False, f"Selected PDF file must have a .pdf extension: {pdf_str}"
+        if txt.suffix.lower() != ".txt":
+            return False, f"Selected text file must have a .txt extension: {txt_str}"
 
         return True, ""
 
