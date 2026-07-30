@@ -3,9 +3,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import re
-import fitz  # PyMuPDF
+import fitz 
 
-# --- Constants & Configuration ---
 VALID_BOUNDARIES = set("\n\t\r ()[]{}<>\"")  # Characters that can act as boundaries
 DEFAULT_HIGHLIGHT_COLOR = (0.0, 1.0, 0.0)  # Pure Green (RGB)
 
@@ -18,7 +17,23 @@ class HighlightReport:
 
 
 def load_and_clean_nets(txt_path: Path) -> List[str]:
-    """Reads, deduplicates, and sorts target net names by descending length."""
+    """Reads net names from a text file, removes duplicates, and sorts them by length.
+
+    Parameters
+    ----------
+    txt_path : Path
+        The file path to the text file containing net names (one per line).
+
+    Returns
+    -------
+    List[str]
+        A list of unique, non-empty net names sorted in descending order by character length.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the provided `txt_path` does not exist or is not a file.
+    """
     if not txt_path.is_file():
         raise FileNotFoundError(f"Text file not found: {txt_path}")
 
@@ -27,7 +42,8 @@ def load_and_clean_nets(txt_path: Path) -> List[str]:
         for line in txt_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     }
-    # Sort descending by length to match multi-char nets before substrings
+
+    # Sort by descending length to prioritize longer nets first during matching
     return sorted(nets, key=len, reverse=True)
 
 
@@ -37,6 +53,85 @@ def is_valid_boundary(char: str) -> bool:
         return True
     return char in VALID_BOUNDARIES
 
+def _is_valid_net_match(word_text: str, net: str, start_idx: int) -> bool:
+    """Checks whether a substring match within a word has valid boundary characters around it.
+
+    Parameters
+    ----------
+    word_text : str
+        The full string containing the match.
+    net : str
+        The target net string.
+    start_idx : int
+        Starting character index of the match within word_text.
+
+    Returns
+    -------
+    bool
+        True if the surrounding characters are valid boundaries, False otherwise.
+    """
+    char_before = word_text[start_idx - 1] if start_idx > 0 else ""
+    end_idx = start_idx + len(net)
+    char_after = word_text[end_idx] if end_idx < len(word_text) else ""
+
+    return is_valid_boundary(char_before) and is_valid_boundary(char_after)
+
+def _process_page_words(
+    page: fitz.Page,
+    target_nets: List[str],
+    summary: Dict[str, int],
+    color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR,
+) -> None:
+    """Extracts words from a single PDF page and highlights matched target nets.
+
+    Parameters
+    ----------
+    page : fitz.Page
+        The PyMuPDF page object to process.
+    target_nets : List[str]
+        List of target net names to search for.
+    color : Tuple[float, float, float]
+        RGB color tuple for the highlight annotation.
+    summary : Dict[str, int]
+        Dictionary tracking match counts per net, updated in-function.
+    """
+    words = page.get_text("words")
+
+    for w in words:
+        word_text = w[4]
+        word_rect = fitz.Rect(w[:4])
+
+        for net in target_nets:
+            if net not in word_text:
+                continue
+
+            # EXACT MATCH 
+            if word_text == net:
+                annot = page.add_highlight_annot(word_rect)
+                annot.set_colors(stroke=color)
+                annot.update()
+                summary[net] += 1
+                break  
+
+            # PARTIAL MATCH WITH BOUNDARY CHECKS
+            idx = word_text.find(net)
+            match_found = False
+
+            while idx != -1:
+                if _is_valid_net_match(word_text, net, idx):
+                    sub_matches = page.search_for(net, clip=word_rect)
+                    target_rect = sub_matches[0] if sub_matches else word_rect
+
+                    annot = page.add_highlight_annot(target_rect)
+                    annot.set_colors(stroke=color)
+                    annot.update()
+                    summary[net] += 1
+                    match_found = True
+                    break
+                idx = word_text.find(net, idx + len(net))
+
+            if match_found:
+                break
 
 def highlight_nets(
     input_pdf: Path,
@@ -44,6 +139,29 @@ def highlight_nets(
     target_nets: List[str],
     color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR,
 ) -> Dict[str, int]:
+    """Highlights occurrences of target net names in a PDF file and saves the output.
+
+    Parameters
+    ----------
+    input_pdf : Path
+        Path to the input PDF file.
+    output_pdf : Path
+        Destination path where the highlighted PDF will be saved.
+    target_nets : List[str]
+        List of net names to search and highlight.
+    color : Tuple[float, float, float], optional
+        RGB highlight color, defaults to DEFAULT_HIGHLIGHT_COLOR.
+
+    Returns
+    -------
+    Dict[str, int]
+        A summary dictionary mapping each net name to its total hit count.
+
+    Raises
+    ------
+    FileNotFoundError
+        If input_pdf does not exist.
+    """
     if not input_pdf.is_file():
         raise FileNotFoundError(f"PDF file not found: {input_pdf}")
 
@@ -51,53 +169,12 @@ def highlight_nets(
 
     with fitz.open(input_pdf) as doc:
         for page in doc:
-            # Extract all word blocks on the page: (x0, y0, x1, y1, "word_string", ...)
-            words = page.get_text("words")
-
-            for w in words:
-                word_text = w[4]
-                word_rect = fitz.Rect(w[:4])
-
-                for net in target_nets:
-                    if net not in word_text:
-                        continue
-
-                    # Exact full match (e.g. word is "0V")
-                    if word_text == net:
-                        annot = page.add_highlight_annot(word_rect)
-                        annot.set_colors(stroke=color)
-                        annot.update()
-                        summary[net] += 1
-                        break  # Found match for this word
-
-                    # Substring match (e.g. word is "(0V)" or "0V;")
-                    idx = word_text.find(net)
-                    while idx != -1:
-                        char_before = word_text[idx - 1] if idx > 0 else ""
-                        char_after = (
-                            word_text[idx + len(net)]
-                            if (idx + len(net)) < len(word_text)
-                            else ""
-                        )
-
-                        if is_valid_boundary(char_before) and is_valid_boundary(char_after):
-                            # For substring matches inside punctuation like (0V), 
-                            # search specifically within the word's bounding rect
-                            sub_matches = page.search_for(net, clip=word_rect)
-                            target_rect = sub_matches[0] if sub_matches else word_rect
-                            
-                            annot = page.add_highlight_annot(target_rect)
-                            annot.set_colors(stroke=color)
-                            annot.update()
-                            summary[net] += 1
-                            break
-                        
-                        # Continue searching in case net appears again in word
-                        idx = word_text.find(net, idx + len(net))
+            _process_page_words(page, target_nets, summary, color)
 
         doc.save(output_pdf, garbage=4, clean=True)
 
     return summary
+
 def is_green_annotation(color: Optional[Tuple[float, ...]]) -> bool:
     """Checks whether an annotation stroke color is predominantly green."""
     if not color or len(color) < 3:
