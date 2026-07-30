@@ -4,7 +4,9 @@ from src.view import HighlighterView
 
 
 class Application:
-    """Main application launcher class."""
+    """!
+    @brief Main application launcher class.
+    """
     def __init__(self):
         self.model = HighlighterModel()
         self.view = HighlighterView()

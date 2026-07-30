@@ -1,11 +1,20 @@
+import threading
 from .model import HighlighterModel
 from .view import HighlighterView
 
 
 class HighlighterController:
-    """Coordinates events between the HighlighterView and HighlighterModel."""
+    """!
+    @brief Coordinates user interactions from HighlighterView with processing logic in HighlighterModel.
+    """
 
-    def __init__(self, model: HighlighterModel, view: HighlighterView):
+    def __init__(self, model: HighlighterModel, view: HighlighterView) -> None:
+        """!
+        @brief Binds GUI component listeners and initializes default status log.
+
+        @param model Reference to the application HighlighterModel instance.
+        @param view Reference to the application HighlighterView instance.
+        """
         self.model = model
         self.view = view
 
@@ -13,11 +22,17 @@ class HighlighterController:
         self.view.log_message("System initialized. Select files and click 'Go'.")
 
     def _bind_events(self) -> None:
+        """!
+        @brief Registers controller handler functions to view button commands.
+        """
         self.view.browse_pdf_btn.config(command=self.handle_browse_pdf)
         self.view.browse_txt_btn.config(command=self.handle_browse_txt)
         self.view.go_btn.config(command=self.handle_go)
 
     def handle_browse_pdf(self) -> None:
+        """!
+        @brief Opens the PDF file dialog and updates the model and view state with the selection.
+        """
         path = self.view.select_file(
             "Select PDF file", [("PDF files", "*.pdf")]
         )
@@ -26,6 +41,9 @@ class HighlighterController:
             self.view.pdf_var.set(path)
 
     def handle_browse_txt(self) -> None:
+        """!
+        @brief Opens the TXT file dialog and updates the model and view state with the selection.
+        """
         path = self.view.select_file(
             "Select Text file", [("Text files", "*.txt")]
         )
@@ -34,6 +52,9 @@ class HighlighterController:
             self.view.txt_var.set(path)
 
     def handle_go(self) -> None:
+        """!
+        @brief Validates inputs and runs the PDF processing routine in a non-blocking background thread.
+        """
         self.model.pdf_path = self.view.pdf_var.get().strip()
         self.model.txt_path = self.view.txt_var.get().strip()
         self.model.include_test_points = self.view.test_points_var.get()
@@ -43,16 +64,20 @@ class HighlighterController:
             self.view.log_message(err_msg, is_error=True)
             return
 
-        self.view.log_message(
-            f"Starting process...\n PDF: {self.model.pdf_path}\n"
-            f" TXT: {self.model.txt_path}\n"
-            f" Include Test Points: {self.model.include_test_points}"
-        )
+        self.view.go_btn.config(state="disabled")
+        self.view.log_message(f"Processing PDF: {self.model.pdf_path}...")
 
-        try:
-            success, result_msg = self.model.process_pdf()
-            self.view.log_message(result_msg, is_error=not success)
-        except Exception as e:
-            self.view.log_message(
-                f"An error occurred: {str(e)}", is_error=True
-            )
+        def run_process():
+            try:
+                success, result_msg = self.model.process_pdf()
+                self.view.after(
+                    0, lambda: self.view.log_message(result_msg, is_error=not success)
+                )
+            except Exception as e:
+                self.view.after(
+                    0, lambda: self.view.log_message(f"An error occurred: {str(e)}", is_error=True)
+                )
+            finally:
+                self.view.after(0, lambda: self.view.go_btn.config(state="normal"))
+
+        threading.Thread(target=run_process, daemon=True).start()
