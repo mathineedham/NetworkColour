@@ -195,7 +195,7 @@ class HighlighterModel:
         rect: fitz.Rect,
         pt_num: int,
         position: str = "bottom_right",
-        fontsize: float = 6.0,
+        fontsize: float = 15.0,
         color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR,
     ) -> None:
         """!
