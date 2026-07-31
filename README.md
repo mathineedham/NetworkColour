@@ -15,6 +15,9 @@ the text file and added to the respective network.
 
 ## Note to self:
 - add a requirements.txt, LICENSE
+- test all function in model.py at least
+- recheck all documentation && imports syntax
+- rewrite readme
 
 ## Commands
 init:

@@ -163,7 +163,7 @@ class HighlighterModel:
         pt_num: int,
         position: str = "bottom_right",
         fontsize: float = 6.0,
-        color: Tuple[float, float, float] = (0, 0, 0)
+        color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR
     ) -> None:
         """!
         @brief Inserts the test point number label adjacent to a highlighted area.
@@ -175,20 +175,18 @@ class HighlighterModel:
         @param fontsize Text size for the point label.
         @param color RGB color tuple for the text.
         """
-        label = f"TP{pt_num}"
+        label = f"{pt_num}"
         
         if position == "bottom_right":
-            # Placed slightly to the right and lower relative to the baseline
-            point = fitz.Point(rect.x1 + 2, rect.y1)
+            point = fitz.Point(rect.x1 + 4, rect.y1)
         elif position == "bottom_left":
-            # Placed below the bottom-left edge
             point = fitz.Point(rect.x0, rect.y1 + fontsize)
         elif position == "top_right":
-            point = fitz.Point(rect.x1 + 2, rect.y0 + fontsize)
-        else:  # top_left
-            point = fitz.Point(rect.x0, rect.y0 - 2)
+            point = fitz.Point(rect.x1 + 4, rect.y0 + fontsize)
+        else:
+            point = fitz.Point(rect.x0, rect.y0 - 4)
 
-        page.insert_text(point, label, fontsize=fontsize, color=color)
+        page.insert_text(point, label, fontsize=15, color=color)
     
     def _process_page_words(
         self,
@@ -243,11 +241,12 @@ class HighlighterModel:
                             page=page,
                             rect=target_rect,
                             pt_num=points_number[net],
-                            position="bottom_right" # Adjust to "bottom_left", "top_right", etc. as desired
+                            position="bottom_right" ,
+                            color=color
                         )
                     break
 
-    def process_pdf(self, add_points_number: bool = False) -> Tuple[bool, str]:
+    def process_pdf(self, add_points_number: bool = False, color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR) -> Tuple[bool, str]:
         """!
         @brief Executes the net highlighting pipeline on the configured PDF.
 
@@ -268,7 +267,7 @@ class HighlighterModel:
 
         with fitz.open(input_pdf) as doc:
             for page in doc:
-                self._process_page_words(page, points_number, target_nets, summary, add_points_number=add_points_number)
+                self._process_page_words(page, points_number, target_nets, summary, add_points_number=add_points_number, color=color)
 
             doc.save(output_pdf, garbage=4, clean=True)
 

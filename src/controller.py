@@ -59,6 +59,8 @@ class HighlighterController:
         self.model.pdf_path = self.view.pdf_var.get().strip()
         self.model.txt_path = self.view.txt_var.get().strip()
         self.model.include_test_points = self.view.test_points_var.get()
+        selected_color = self.view.get_selected_rgb_normalized()
+        add_points = self.view.test_points_var.get()
 
         is_valid, err_msg = self.model.validate_inputs()
         if not is_valid:
@@ -70,7 +72,7 @@ class HighlighterController:
 
         def run_process():
             try:
-                success, result_msg = self.model.process_pdf(add_points_number=self.model.include_test_points)
+                success, result_msg = self.model.process_pdf(add_points_number=self.model.include_test_points, color=selected_color)
                 self.view.after(
                     0, lambda: self.view.log_message(result_msg, is_error=not success)
                 )

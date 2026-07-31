@@ -9,6 +9,13 @@ class HighlighterView(tk.Tk):
     """!
     @brief Manages GUI window layout, widgets, and user visual output.
     """
+    DEFAULT_PRESET_COLORS = [
+        "#00FF00",  # Green
+        "#FFCC00",  # Yellow
+        "#FF0000",  # Red
+        "#FF1493",  # Pink
+        "#00BFFF",  # Blue
+    ]
 
     def __init__(self) -> None:
         """!
@@ -18,6 +25,9 @@ class HighlighterView(tk.Tk):
         self.title("Network names highlighter")
         self.geometry("600x480")
         self.minsize(500, 400)
+
+        self.selected_color_hex: str = "#00FF00"
+        self._color_canvases = []
 
         self._init_ui()
 
@@ -38,7 +48,6 @@ class HighlighterView(tk.Tk):
 
         @param parent Parent Tkinter widget container.
         """
-        # Create a container frame for the LabelFrame title + info icon
         title_container = ttk.Frame(parent)
         
         ttk.Label(
@@ -47,7 +56,6 @@ class HighlighterView(tk.Tk):
             font=("TkDefaultFont", 9, "bold")
         ).pack(side=tk.LEFT)
 
-        # Subtle, modern circular icon button
         self.info_btn = tk.Label(
             title_container,
             text=" ⓘ ",
@@ -57,7 +65,6 @@ class HighlighterView(tk.Tk):
         )
         self.info_btn.pack(side=tk.LEFT)
 
-        # Pass title_container directly as the LabelFrame's labelwidget
         files_frame = ttk.LabelFrame(parent, labelwidget=title_container, padding="10")
         files_frame.pack(fill=tk.X, pady=(0, 10))
         files_frame.columnconfigure(1, weight=1)
@@ -107,6 +114,63 @@ class HighlighterView(tk.Tk):
         self.go_btn = ttk.Button(controls_frame, text="Go")
         self.go_btn.pack(side=tk.LEFT)
 
+
+        color_frame = ttk.Frame(controls_frame)
+        color_frame.pack(side=tk.LEFT, fill=tk.Y)
+
+        self._color_canvases.clear()
+
+        for hex_color in self.DEFAULT_PRESET_COLORS:
+            canvas = tk.Canvas(
+                color_frame,
+                width=22,
+                height=22,
+                highlightthickness=0,
+                cursor="hand2",
+            )
+            canvas.pack(side=tk.LEFT, padx=3)
+            canvas.bind(
+                "<Button-1>",
+                lambda e, color=hex_color: self._select_color(color),
+            )
+            self._color_canvases.append((canvas, hex_color))
+
+        self._update_color_selection_ui()
+
+    def _select_color(self, hex_color: str) -> None:
+        """!
+        @brief Sets the selected highlight color and updates circle outlines.
+        """
+        self.selected_color_hex = hex_color.upper()
+        self._update_color_selection_ui()
+
+    def _update_color_selection_ui(self) -> None:
+        """!
+        @brief Redraws all color circles with selection indicators (thick outer border).
+        """
+        for canvas, hex_color in self._color_canvases:
+            canvas.delete("all")
+            is_selected = hex_color.upper() == self.selected_color_hex
+
+            if is_selected:
+                # Draw outer selection ring
+                canvas.create_oval(1, 1, 21, 21, outline="#0078D4", width=2)
+                canvas.create_oval(3, 3, 19, 19, fill=hex_color, outline="")
+            else:
+                canvas.create_oval(
+                    3, 3, 19, 19, fill=hex_color, outline="#888888"
+                )
+
+    def get_selected_rgb_normalized(self) -> Tuple[float, float, float]:
+        """!
+        @brief Converts the selected HEX color into PyMuPDF compatible RGB floats (0.0 to 1.0).
+
+        @return RGB tuple suitable for PyMuPDF annotation colors.
+        """
+        hex_str = self.selected_color_hex.lstrip("#")
+        r, g, b = tuple(int(hex_str[i : i + 2], 16) for i in (0, 2, 4))
+        return r / 255.0, g / 255.0, b / 255.0
+    
     def _create_log_frame(self, parent: ttk.Frame) -> None:
         """!
         @brief Creates the scrollable logging console and configures text tags.
