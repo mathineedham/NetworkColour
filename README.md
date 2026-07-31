@@ -23,5 +23,5 @@ python -m unittest discover -s tests
 ## File Format Requirements
 - PDF File: Target schematic or board PDF document (.pdf).
 - Network Names File: UTF-8 encoded text file (.txt) containing net names.
-        - Without test points: One net name per line (e.g., NET_A).
-        - With test points: Net name and point number separated by a semicolon (e.g., NET_A;101).
+    - Without test points: One net name per line (e.g., NET_A).
+    - With test points: Net name and point number separated by a semicolon (e.g., NET_A;101).
