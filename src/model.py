@@ -94,7 +94,8 @@ class HighlighterModel:
                 if ";" not in line:
                     raise ValueError(
                         f"Format error on line {line_idx} in '{txt_path.name}': "
-                        f"Missing ';' separator in '{line}'. Expected format 'net_name;point_number'."
+                        f"Missing ';' separator in '{line}'. "
+                        "Expected format 'net_name;point_number'."
                     )
                 net, pt = line.rsplit(";", 1)
                 net, pt = net.strip(), pt.strip()
@@ -154,20 +155,58 @@ class HighlighterModel:
         char_after = word_text[end_idx] if end_idx < len(word_text) else ""
 
         return self.is_valid_boundary(char_before) and self.is_valid_boundary(char_after)
+    
+    def _add_point_label(
+        self,
+        page: fitz.Page,
+        rect: fitz.Rect,
+        pt_num: int,
+        position: str = "bottom_right",
+        fontsize: float = 6.0,
+        color: Tuple[float, float, float] = (0, 0, 0)
+    ) -> None:
+        """!
+        @brief Inserts the test point number label adjacent to a highlighted area.
 
+        @param page The PyMuPDF page object.
+        @param rect The bounding rectangle of the highlighted text.
+        @param pt_num The test point number to render.
+        @param position Label placement: 'bottom_right', 'bottom_left', 'top_right', or 'top_left'.
+        @param fontsize Text size for the point label.
+        @param color RGB color tuple for the text.
+        """
+        label = f"TP{pt_num}"
+        
+        if position == "bottom_right":
+            # Placed slightly to the right and lower relative to the baseline
+            point = fitz.Point(rect.x1 + 2, rect.y1)
+        elif position == "bottom_left":
+            # Placed below the bottom-left edge
+            point = fitz.Point(rect.x0, rect.y1 + fontsize)
+        elif position == "top_right":
+            point = fitz.Point(rect.x1 + 2, rect.y0 + fontsize)
+        else:  # top_left
+            point = fitz.Point(rect.x0, rect.y0 - 2)
+
+        page.insert_text(point, label, fontsize=fontsize, color=color)
+    
     def _process_page_words(
         self,
         page: fitz.Page,
+        points_number: Dict[str, int],
         target_nets: List[str],
         summary: Dict[str, int],
+        add_points_number: bool = False,
         color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR,
     ) -> None:
         """!
         @brief Extracts words from a single PDF page and highlights matched target nets.
 
         @param page The PyMuPDF page object to process.
+        @param points_number Dictionary mapping net names to their corresponding test point numbers.
         @param target_nets List of target net names to search for.
         @param summary Dictionary tracking hit counts per net, modified in-place.
+        @param add_points_number Flag indicating whether to include test point numbers in the search.
         @param color RGB color tuple for the highlight annotation.
         """
         words = page.get_text("words")
@@ -180,30 +219,32 @@ class HighlighterModel:
                 if net not in word_text:
                     continue
 
+                target_rect = None
+
                 if word_text == net:
-                    annot = page.add_highlight_annot(word_rect)
+                    target_rect = word_rect
+                else:
+                    idx = word_text.find(net)
+                    while idx != -1:
+                        if self._is_valid_net_match(word_text, net, idx):
+                            sub_matches = page.search_for(net, clip=word_rect)
+                            target_rect = sub_matches[0] if sub_matches else word_rect
+                            break
+                        idx = word_text.find(net, idx + len(net))
+
+                if target_rect:
+                    annot = page.add_highlight_annot(target_rect)
                     annot.set_colors(stroke=color)
                     annot.update()
                     summary[net] += 1
-                    break
 
-                idx = word_text.find(net)
-                match_found = False
-
-                while idx != -1:
-                    if self._is_valid_net_match(word_text, net, idx):
-                        sub_matches = page.search_for(net, clip=word_rect)
-                        target_rect = sub_matches[0] if sub_matches else word_rect
-
-                        annot = page.add_highlight_annot(target_rect)
-                        annot.set_colors(stroke=color)
-                        annot.update()
-                        summary[net] += 1
-                        match_found = True
-                        break
-                    idx = word_text.find(net, idx + len(net))
-
-                if match_found:
+                    if add_points_number and points_number and net in points_number:
+                        self._add_point_label(
+                            page=page,
+                            rect=target_rect,
+                            pt_num=points_number[net],
+                            position="bottom_right" # Adjust to "bottom_left", "top_right", etc. as desired
+                        )
                     break
 
     def process_pdf(self, add_points_number: bool = False) -> Tuple[bool, str]:
@@ -218,7 +259,6 @@ class HighlighterModel:
         txt_path = Path(self.txt_path)
         output_pdf = input_pdf.with_name(f"{input_pdf.stem}_highlighted{input_pdf.suffix}")
 
-        # --- FIX HERE: Unpack both points_number AND target_nets ---
         points_number, target_nets = self.load_and_clean_nets(txt_path, add_points_number=add_points_number)
         
         if not target_nets:
@@ -228,7 +268,7 @@ class HighlighterModel:
 
         with fitz.open(input_pdf) as doc:
             for page in doc:
-                self._process_page_words(page, target_nets, summary)
+                self._process_page_words(page, points_number, target_nets, summary, add_points_number=add_points_number)
 
             doc.save(output_pdf, garbage=4, clean=True)
 
