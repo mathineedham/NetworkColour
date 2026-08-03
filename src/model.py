@@ -6,6 +6,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+import math
 import fitz
 
 ## Valid boundary characters surrounding net names in text streams
@@ -69,7 +70,7 @@ class HighlighterModel:
 
     def load_and_clean_nets(
         self, txt_path: Path, add_points_number: bool = False
-    ) -> Tuple[Dict[str, int], List[str]]:
+    ) -> Tuple[Dict[str, str], List[str]]:
         """!
         @brief Reads net names from a text file, validates formatting, and sorts them by length.
 
@@ -78,7 +79,7 @@ class HighlighterModel:
         @return Tuple containing (points_number_dict, sorted_net_names_list).
         @raises ValueError If a line violates expected formatting rules.
         """
-        points_number: Dict[str, int] = {}
+        points_number: Dict[str, str] = {}
         raw_nets: List[str] = []
 
         lines = txt_path.read_text(encoding="utf-8").splitlines()
@@ -120,15 +121,13 @@ class HighlighterModel:
                 "Expected only network names when add_points_number=False."
             )
 
-    def _parse_points_line(self, line: str, line_idx: int, file_name: str) -> Tuple[str, int]:
+    def _parse_points_line(self, line: str, line_idx: int, file_name: str) -> Tuple[str, str]:
         """!
-        @brief Helper to parse and validate 'net;point' lines.
-
-        @param line Line string to parse.
-        @param line_idx Current line number in source file.
-        @param file_name File name string for exception messaging.
-        @return Tuple of parsed (net_name, point_number).
-        @raises ValueError If parsing fails due to bad separators or non-numeric digits.
+        @brief Helper to parse and validate 'net;point(s)' lines as string.
+        @param[in] line Line string to parse.
+        @param[in] line_idx Current line number in source file.
+        @param[in] file_name File name string for exception messaging.
+        @raises ValueError If the line does not follow the expected format.
         """
         if ";" not in line:
             raise ValueError(
@@ -146,7 +145,13 @@ class HighlighterModel:
                 "Net name cannot be empty."
             )
 
-        forbidden_chars = VALID_BOUNDARIES | {";", ","}
+        if not pt:
+            raise ValueError(
+                f"Format error on line {line_idx} in '{file_name}': "
+                "Point number cannot be empty."
+            )
+
+        forbidden_chars = VALID_BOUNDARIES | {";"}
         found_invalid = [char for char in net if char in forbidden_chars]
         if found_invalid:
             raise ValueError(
@@ -154,13 +159,7 @@ class HighlighterModel:
                 f"Invalid character '{found_invalid[0]}' found in net name '{net}'."
             )
 
-        if not pt.isdigit():
-            raise ValueError(
-                f"Format error on line {line_idx} in '{file_name}': "
-                f"Point number must be a digit, got '{pt}'."
-            )
-
-        return net, int(pt)
+        return net, pt
 
     @staticmethod
     def is_valid_boundary(char: str) -> bool:
@@ -193,38 +192,55 @@ class HighlighterModel:
         self,
         page: fitz.Page,
         rect: fitz.Rect,
-        pt_num: int,
-        position: str = "bottom_right",
-        fontsize: float = 15.0,
+        pt_label: str,
+        dir_vector: Tuple[float, float] = (1.0, 0.0),
+        fontsize: float = 10.0,
         color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR,
     ) -> None:
         """!
-        @brief Inserts the test point number label adjacent to a highlighted area.
+        @brief Inserts the test point string label at the top-right corner matching text orientation.
 
         @param page PyMuPDF page object.
-        @param rect Bounding rectangle of the highlighted text.
-        @param pt_num Test point integer label.
-        @param position Label placement: 'bottom_right', 'bottom_left', 'top_right', or 'top_left'.
-        @param fontsize Text size for the point label.
-        @param color RGB color tuple for text rendering.
+        @param rect Bounding rectangle of the highlighted net text.
+        @param pt_label The test point string to insert.
+        @param dir_vector Direction vector of the text line for rotation alignment.
+        @param fontsize Font size for the inserted label.
+        @param color RGB color tuple for the label text.
         """
-        label = f"{pt_num}"
+        dx, dy = dir_vector
 
-        if position == "bottom_right":
-            point = fitz.Point(rect.x1 + 4, rect.y1)
-        elif position == "bottom_left":
-            point = fitz.Point(rect.x0, rect.y1 + fontsize)
-        elif position == "top_right":
-            point = fitz.Point(rect.x1 + 4, rect.y0 + fontsize)
-        else:  # top_left
-            point = fitz.Point(rect.x0, rect.y0 - 4)
+        # Calculate exact angle in degrees counter-clockwise from horizontal right
+        angle_rad = math.atan2(dy, dx)
+        angle_deg = int(round(math.degrees(angle_rad))) % 360
 
-        page.insert_text(point, label, fontsize=fontsize, color=color)
+        # Flip vertical reading directions (90 <-> 270) to match bottom-to-top layout
+        if angle_deg == 90:
+            angle_deg = 270
+        elif angle_deg == 270:
+            angle_deg = 90
 
+        # Position at the top-right corner of the target rectangle
+        if angle_deg == 270:  # Vertical bottom-to-top (places label above the top end of the net)
+            point = fitz.Point(rect.x1 + 3, rect.y0)
+        elif angle_deg == 90:   # Top-to-Bottom
+            point = fitz.Point(rect.x1 + 3, rect.y0)
+        elif angle_deg == 180:  # Horizontal (Right-to-Left)
+            point = fitz.Point(rect.x1 + 3, rect.y0 - 2)
+        else:                   # Horizontal (Left-to-Right / 0 deg)
+            point = fitz.Point(rect.x1 + 3, rect.y0)
+
+        page.insert_text(
+            point, 
+            pt_label, 
+            fontsize=fontsize, 
+            color=color, 
+            rotate=angle_deg
+        )
+    
     def _process_page_words(
         self,
         page: fitz.Page,
-        points_number: Dict[str, int],
+        points_number: Dict[str, str],
         target_nets: List[str],
         summary: Dict[str, int],
         add_points_number: bool = False,
@@ -240,44 +256,55 @@ class HighlighterModel:
         @param add_points_number Flag indicating whether test points should be labeled.
         @param color RGB color tuple for highlights and annotations.
         """
-        words = page.get_text("words")
+        page_dict = page.get_text("dict")
 
-        for w in words:
-            word_text = w[4]
-            word_rect = fitz.Rect(w[:4])
+        for block in page_dict.get("blocks", []):
+            if "lines" not in block:
+                continue
 
-            for net in target_nets:
-                if net not in word_text:
-                    continue
+            for line in block["lines"]:
+                dir_vector = line.get("dir", (1.0, 0.0))
 
-                target_rect: Optional[fitz.Rect] = None
+                for span in line.get("spans", []):
+                    span_text = span.get("text", "")
+                    if not span_text:
+                        continue
 
-                if word_text == net:
-                    target_rect = word_rect
-                else:
-                    idx = word_text.find(net)
-                    while idx != -1:
-                        if self._is_valid_net_match(word_text, net, idx):
-                            sub_matches = page.search_for(net, clip=word_rect)
-                            target_rect = sub_matches[0] if sub_matches else word_rect
+                    span_bbox = span.get("bbox")
+                    span_rect = fitz.Rect(span_bbox)
+
+                    for net in target_nets:
+                        if net not in span_text:
+                            continue
+
+                        target_rect: Optional[fitz.Rect] = None
+
+                        if span_text == net:
+                            target_rect = span_rect
+                        else:
+                            idx = span_text.find(net)
+                            while idx != -1:
+                                if self._is_valid_net_match(span_text, net, idx):
+                                    sub_matches = page.search_for(net, clip=span_rect)
+                                    target_rect = sub_matches[0] if sub_matches else span_rect
+                                    break
+                                idx = span_text.find(net, idx + len(net))
+
+                        if target_rect:
+                            annot = page.add_highlight_annot(target_rect)
+                            annot.set_colors(stroke=color)
+                            annot.update()
+                            summary[net] += 1
+
+                            if add_points_number and points_number and net in points_number:
+                                self._add_point_label(
+                                    page=page,
+                                    rect=target_rect,
+                                    pt_label=points_number[net],
+                                    dir_vector=dir_vector,
+                                    color=color,
+                                )
                             break
-                        idx = word_text.find(net, idx + len(net))
-
-                if target_rect:
-                    annot = page.add_highlight_annot(target_rect)
-                    annot.set_colors(stroke=color)
-                    annot.update()
-                    summary[net] += 1
-
-                    if add_points_number and points_number and net in points_number:
-                        self._add_point_label(
-                            page=page,
-                            rect=target_rect,
-                            pt_num=points_number[net],
-                            position="bottom_right",
-                            color=color,
-                        )
-                    break
 
     def process_pdf(
         self,

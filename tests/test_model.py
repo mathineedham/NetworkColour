@@ -78,31 +78,29 @@ class TestHighlighterModel(unittest.TestCase):
     # load_and_clean_nets (add_points_number=True)
 
     def test_load_nets_with_points_success(self) -> None:
-        """Test valid file loading with test point numbers."""
+        """Test valid file loading with single and multiple test point numbers as strings."""
         txt_file = self.temp_path / "valid_points.txt"
-        txt_file.write_text("NET_A;10\nNET_LONG;20\n", encoding="utf-8")
+        txt_file.write_text("NET_A;nb1\nNET_LONG;nb1,nb2\nNET_MULT;10,20\n", encoding="utf-8")
 
         points, nets = self.model.load_and_clean_nets(txt_file, add_points_number=True)
 
-        self.assertEqual(points, {"NET_A": 10, "NET_LONG": 20})
-        self.assertEqual(nets, ["NET_LONG", "NET_A"])
+        self.assertEqual(points, {"NET_A": "nb1", "NET_LONG": "nb1,nb2", "NET_MULT": "10,20"})
+        self.assertEqual(nets, ["NET_LONG", "NET_MULT", "NET_A"])
 
     def test_load_nets_with_points_raises_on_invalid_lines(self) -> None:
         """Test that invalid lines raise ValueError when add_points_number=True."""
         bad_lines = [
-            ";10",
+            ";nb1",
             "name2;",
-            "name3,10",
-            "[name4]; 10",
-            "name5;10;extra",
-            "name6;abc",
-            "name7;-2",
+            "name3,nb1",
+            "[name4]; nb1",
+            "name5;nb1;extra",
         ]
 
         for bad_line in bad_lines:
             with self.subTest(line=bad_line):
                 txt_file = self.temp_path / "invalid_point_line.txt"
-                txt_file.write_text(f"valid_net;100\n{bad_line}\nvalid_net2;200", encoding="utf-8")
+                txt_file.write_text(f"valid_net;nb1\n{bad_line}\nvalid_net2;nb2", encoding="utf-8")
 
                 with self.assertRaises(ValueError):
                     self.model.load_and_clean_nets(txt_file, add_points_number=True)
@@ -203,10 +201,10 @@ class TestHighlighterModel(unittest.TestCase):
         doc.close()
 
     def test_process_pdf_success_with_points_and_labels(self) -> None:
-        """Test end-to-end PDF processing with test points and labels."""
+        """Test end-to-end PDF processing with test points and string labels."""
         pdf_path = self._create_sample_pdf("test_pts.pdf", "Connection NET_A is here.")
         txt_path = self.temp_path / "nets.txt"
-        txt_path.write_text("NET_A;101\n", encoding="utf-8")
+        txt_path.write_text("NET_A;nb1,nb2\n", encoding="utf-8")
 
         self.model.pdf_path = str(pdf_path)
         self.model.txt_path = str(txt_path)
@@ -219,7 +217,7 @@ class TestHighlighterModel(unittest.TestCase):
         out_pdf = self.temp_path / "test_pts_highlighted.pdf"
         doc = fitz.open(out_pdf)
         text = doc[0].get_text()
-        self.assertIn("101", text)
+        self.assertIn("nb1,nb2", text)
         doc.close()
 
     def test_process_pdf_returns_false_on_empty_nets(self) -> None:

@@ -41,8 +41,8 @@ class InfoWindow(tk.Toplevel):
         self._create_section(
             parent=main_frame,
             title="With Test Point Numbers",
-            good_text="name1;10\nname2;20\nname3;30",    
-            bad_text=";10\nname2;\nname3,10\n[name4]; 10\nname5;10;extra\nname6;abc\nname7;-2",      
+            good_text="name1;nb1\nname2;nb1,nb2\nname3;10,20,30",    
+            bad_text=";nb1\nname2;\nname3,10\n[name4]; nb1\nname5;nb1;extra",      
         )
 
     def _create_section(
