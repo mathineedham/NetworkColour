@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import math
+import tempfile
 import fitz
 
 ## Valid boundary characters surrounding net names in text streams
@@ -14,6 +15,9 @@ VALID_BOUNDARIES = set("\n\t\r ()[]{}<>\",")
 
 ## Default green highlight color in RGB (0.0 - 1.0)
 DEFAULT_HIGHLIGHT_COLOR: Tuple[float, float, float] = (0.0, 1.0, 0.0)
+
+## Batch size for processing pages in the PDF 
+BATCH_SIZE = 5  # Number of pages to process in one batch for performance
 
 
 @dataclass(slots=True)
@@ -94,8 +98,11 @@ class HighlighterModel:
                 raw_nets.append(line)
             else:
                 net, pt = self._parse_points_line(line, line_idx, txt_path.name)
+                if net in points_number.keys():
+                    points_number[net] += f",{pt}"
+                else:
+                    points_number[net] = pt
                 raw_nets.append(net)
-                points_number[net] = pt
 
         unique_nets = list(set(raw_nets))
         unique_nets.sort()
@@ -312,11 +319,10 @@ class HighlighterModel:
         color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR,
     ) -> Tuple[bool, str]:
         """!
-        @brief Executes the complete net highlighting pipeline on the configured PDF file.
-
-        @param add_points_number Flag indicating whether to attach test point labels.
-        @param color RGB color tuple for highlighting annotations.
-        @return Tuple containing (success_flag: bool, message: str).
+        @brief Executes the net highlighting pipeline in small batches via temp files,  then merges them into a single final document.
+        @param add_points_number Flag indicating whether test points should be labeled.
+        @param color RGB color tuple for highlights and annotations.
+        @return Tuple containing (success: bool, message: str).
         """
         is_valid, err_msg = self.validate_inputs()
         if not is_valid:
@@ -338,24 +344,112 @@ class HighlighterModel:
 
         summary = {net: 0 for net in target_nets}
 
-        with fitz.open(input_pdf) as doc:
-            for page in doc:
-                self._process_page_words(
-                    page,
-                    points_number,
-                    target_nets,
-                    summary,
-                    add_points_number=add_points_number,
-                    color=color,
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_files = self._process_batches(
+                input_pdf, Path(temp_dir), points_number, target_nets, summary, add_points_number, color
+            )
+            self._merge_and_save(temp_files, output_pdf)
+
+        return True, self._build_report(summary, output_pdf.name)
+
+    def _process_batches(
+        self,
+        input_pdf: Path,
+        temp_dir: Path,
+        points_number: Any,
+        target_nets: list,
+        summary: dict,
+        add_points_number: bool,
+        color: Tuple[float, float, float],
+    ) -> list[Path]:
+        """Processes PDF pages in chunks and saves them to temporary PDF files.
+        @param input_pdf Path to the source PDF file.
+        @param temp_dir Path to the temporary directory for storing chunk PDFs.
+        @param points_number Dictionary mapping net names to test point numbers.
+        @param target_nets List of target net names to highlight.
+        @param summary Dictionary tracking hit counts per net, updated in-place.
+        @param add_points_number Flag indicating whether test points should be labeled.
+        @param color RGB color tuple for highlights and annotations.
+        @return List of temporary PDF file paths for each processed batch.
+        """
+        temp_files = []
+        with fitz.open(input_pdf) as src_doc:
+            total_pages = len(src_doc)
+
+            for start_page in range(0, total_pages, BATCH_SIZE):
+                end_page = min(start_page + BATCH_SIZE, total_pages)
+                temp_path = temp_dir / f"part_{start_page}.pdf"
+
+                self._process_single_batch(
+                    src_doc, start_page, end_page, points_number, target_nets, summary, add_points_number, color, temp_path
                 )
+                temp_files.append(temp_path)
 
-            doc.save(output_pdf, garbage=4, clean=True)
+        return temp_files
 
+    def _process_single_batch(
+        self,
+        src_doc: fitz.Document,
+        start_page: int,
+        end_page: int,
+        points_number: Any,
+        target_nets: list,
+        summary: dict,
+        add_points_number: bool,
+        color: Tuple[float, float, float],
+        temp_path: Path,
+    ) -> None:
+        """Processes a single page range and saves it to a temp path.
+        @param src_doc The source PDF document.
+        @param start_page The starting page index (inclusive).
+        @param end_page The ending page index (exclusive).
+        @param points_number Dictionary mapping net names to test point numbers.
+        @param target_nets List of target net names to highlight.
+        @param summary Dictionary tracking hit counts per net, updated in-place.
+        @param add_points_number Flag indicating whether test points should be labeled.
+        @param color RGB color tuple for highlights and annotations.
+        @param temp_path Path to save the processed batch PDF.
+        """
+        batch_doc = fitz.open()
+        batch_doc.insert_pdf(src_doc, from_page=start_page, to_page=end_page - 1)
+
+        for page in batch_doc:
+            self._process_page_words(
+                page,
+                points_number,
+                target_nets,
+                summary,
+                add_points_number=add_points_number,
+                color=color,
+            )
+
+        batch_doc.save(temp_path, garbage=1)
+        batch_doc.close()
+
+    def _merge_and_save(self, temp_files: list[Path], output_pdf: Path) -> None:
+        """Merges temporary chunk PDFs into the final output document.
+        @param temp_files List of temporary PDF file paths.
+        @param output_pdf Path to save the final merged PDF.
+        """
+        final_doc = fitz.open()
+        for temp_file in temp_files:
+            with fitz.open(temp_file) as chunk:
+                final_doc.insert_pdf(chunk)
+
+        final_doc.save(output_pdf, garbage=3, deflate=True)
+        final_doc.close()
+
+    def _build_report(self, summary: dict, output_filename: str) -> str:
+        """Builds the final summary status message.
+        @param summary Dictionary tracking hit counts per net.
+        @param output_filename Name of the output PDF file.
+        @return Formatted report string.
+        """
         total_matches = sum(summary.values())
         unmatched = [net for net, count in summary.items() if count == 0]
 
-        report_msg = f"Done! Highlighted {total_matches} net occurrences.\nSaved to: {output_pdf.name}"
+        report_msg = f"Done! Highlighted {total_matches} net occurrences.\nSaved to: {output_filename}"
         if unmatched:
             report_msg += f"\nWarning: {len(unmatched)} nets were not found in PDF."
 
-        return True, report_msg
+        return report_msg
