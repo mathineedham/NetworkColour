@@ -171,8 +171,7 @@ class TestHighlighterModel(unittest.TestCase):
 
     def test_is_valid_net_match(self) -> None:
         """Test net match boundary verification within word strings."""
-        word = "(NET_A)"
-        self.assertTrue(self.model._is_valid_net_match(word, "NET_A", 1))
+        self.assertTrue(self.model._is_valid_net_match("(NET_A)", "NET_A", 1))
         self.assertFalse(self.model._is_valid_net_match("XNET_A", "NET_A", 1))
 
     # Complete pipeline processing tests (process_pdf)
