@@ -5,6 +5,7 @@ A Python Tkinter application for matching, highlighting, and labeling network na
 ## Quick Start
 
 ### 1. Installation
+This application uses Python 3.14.6
 Install the required dependencies:
 ```bash
 pip install -r requirements.txt
