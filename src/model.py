@@ -451,5 +451,6 @@ class HighlighterModel:
         report_msg = f"Done! Highlighted {total_matches} net occurrences.\nSaved to: {output_filename}"
         if unmatched:
             report_msg += f"\nWarning: {len(unmatched)} nets were not found in PDF."
+            report_msg += f"\nUnmatched nets:\n" + "\n".join(unmatched)
 
         return report_msg
