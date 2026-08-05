@@ -19,8 +19,8 @@ class InfoWindow(tk.Toplevel):
     def __init__(self, parent: tk.Widget) -> None:
         super().__init__(parent)
         self.title("File Format Requirements")
-        self.geometry("620x460")
-        self.minsize(580, 420)
+        self.geometry("680x520")
+        self.minsize(620, 500)
         self.transient(parent)
 
         self._init_ui()
@@ -43,6 +43,11 @@ class InfoWindow(tk.Toplevel):
             title="With Test Point Numbers",
             good_text="name1;nb1\nname2;nb1,nb2\nname3;10,20,30",    
             bad_text=";nb1\nname2;\nname3,10\n[name4]; nb1\nname5;nb1;extra",      
+        )
+
+        # Section 3: Notes at the bottom
+        self._create_notes_section(
+            parent=main_frame,
         )
 
     def _create_section(
@@ -96,6 +101,33 @@ class InfoWindow(tk.Toplevel):
             border=RED_BORDER,
         )
 
+    def _create_notes_section(self, parent: ttk.Frame) -> None:
+        """!
+        @brief Creates a bottom notes section for user guidance and file rules.
+        """
+        section_title = ttk.Label(
+            parent, text=" Important Formatting & Operational Rules ", font=("TkDefaultFont", 9, "bold")
+        )
+        notes_frame = ttk.LabelFrame(parent, labelwidget=section_title, padding="10")
+        notes_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=(5, 0))
+
+        notes = [
+            "1. Case Sensitivity: Matching is exact. 'aBc' will NOT match 'ABC' in the PDF.",
+            "2. Special Characters: Network names cannot contain spaces, brackets, or punctuation: ( ) [ ] { } < > \" , ;",
+            "3. Active-Low Signals (~ Prefix): Prefixing a net name with '~' (e.g., ~RESET) will only match nets that have a physical line (overline) drawn above them in the PDF.",
+            "4. Output File: A new PDF named '<original_name>_highlighted.pdf' will be saved in the same directory as your source PDF.",
+            ]
+
+        for idx, note in enumerate(notes):
+            lbl = ttk.Label(
+                notes_frame,
+                text=note,
+                font=("TkDefaultFont", 8),
+                wraplength=540,
+                justify="left",
+            )
+            lbl.pack(anchor="w", pady=(0, 3) if idx < len(notes) - 1 else 0)
+        
     @staticmethod
     def _create_card(
         parent: ttk.Widget, text: str, bg: str, fg: str, border: str
