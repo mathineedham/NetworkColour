@@ -244,6 +244,34 @@ class HighlighterModel:
             rotate=angle_deg
         )
     
+    def _has_overline_drawing(self,page: fitz.Page, text_rect: fitz.Rect, tolerance: float = 3.0) -> bool:
+        """
+        Checks if a vector line is drawn directly above the text bounding box.
+        @param page The PyMuPDF page object to inspect.
+        @param text_rect The bounding rectangle of the text to check.
+        @param tolerance The vertical distance threshold to consider a line as "above" the text.
+        @return True if an overline is detected, False otherwise.
+        """
+        drawings =page.get_drawings()
+        
+        for path in drawings:
+            for item in path.get("items", []):
+                # Check for line items: ("l", p1, p2)
+                if item[0] == "l":
+                    p1, p2 = item[1], item[2]
+                    
+                    if abs(p1.y - p2.y) < 1.0:
+                        line_y = p1.y
+                        line_x_min = min(p1.x, p2.x)
+                        line_x_max = max(p1.x, p2.x)
+
+                        is_above = abs(line_y - text_rect.y0) <= tolerance or (text_rect.y0 - tolerance <= line_y <= text_rect.y0 + 2.0)
+                        
+                        overlaps_x = (line_x_min <= text_rect.x1) and (line_x_max >= text_rect.x0)
+                        
+                        if is_above and overlaps_x:
+                            return True
+        return False
     def _process_page_words(
         self,
         page: fitz.Page,
@@ -280,7 +308,9 @@ class HighlighterModel:
                     span_bbox = span.get("bbox")
                     span_rect = fitz.Rect(span_bbox)
 
-                    for net in target_nets:
+                    for rawnet in target_nets:
+                        has_tild_prefix = rawnet.startswith("~")
+                        net = rawnet[1:] if has_tild_prefix else rawnet
                         if net not in span_text:
                             continue
 
@@ -298,16 +328,19 @@ class HighlighterModel:
                                 idx = span_text.find(net, idx + len(net))
 
                         if target_rect:
+                            if has_tild_prefix:
+                                if not self._has_overline_drawing(page, target_rect):
+                                    continue
                             annot = page.add_highlight_annot(target_rect)
                             annot.set_colors(stroke=color)
                             annot.update()
-                            summary[net] += 1
+                            summary[rawnet] += 1
 
-                            if add_points_number and points_number and net in points_number:
+                            if add_points_number and points_number and rawnet in points_number:
                                 self._add_point_label(
                                     page=page,
                                     rect=target_rect,
-                                    pt_label=points_number[net],
+                                    pt_label=points_number[rawnet],
                                     dir_vector=dir_vector,
                                     color=color,
                                 )
