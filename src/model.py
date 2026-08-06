@@ -272,6 +272,7 @@ class HighlighterModel:
                         if is_above and overlaps_x:
                             return True
         return False
+    
     def _process_page_words(
         self,
         page: fitz.Page,
@@ -280,6 +281,7 @@ class HighlighterModel:
         summary: Dict[str, int],
         add_points_number: bool = False,
         color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR,
+        fontsize: float = 10.0
     ) -> None:
         """!
         @brief Extracts words from a single PDF page and highlights matched target nets.
@@ -343,6 +345,7 @@ class HighlighterModel:
                                     pt_label=points_number[rawnet],
                                     dir_vector=dir_vector,
                                     color=color,
+                                    fontsize=fontsize
                                 )
                             break
 
@@ -350,6 +353,7 @@ class HighlighterModel:
         self,
         add_points_number: bool = False,
         color: Tuple[float, float, float] = DEFAULT_HIGHLIGHT_COLOR,
+        fontsize: float = 10.0
     ) -> Tuple[bool, str]:
         """!
         @brief Executes the net highlighting pipeline in small batches via temp files,  then merges them into a single final document.
@@ -379,7 +383,7 @@ class HighlighterModel:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_files = self._process_batches(
-                input_pdf, Path(temp_dir), points_number, target_nets, summary, add_points_number, color
+                input_pdf, Path(temp_dir), points_number, target_nets, summary, add_points_number, color, fontsize
             )
             self._merge_and_save(temp_files, output_pdf)
 
@@ -394,6 +398,7 @@ class HighlighterModel:
         summary: dict,
         add_points_number: bool,
         color: Tuple[float, float, float],
+        fontsize: float
     ) -> list[Path]:
         """Processes PDF pages in chunks and saves them to temporary PDF files.
         @param input_pdf Path to the source PDF file.
@@ -414,7 +419,7 @@ class HighlighterModel:
                 temp_path = temp_dir / f"part_{start_page}.pdf"
 
                 self._process_single_batch(
-                    src_doc, start_page, end_page, points_number, target_nets, summary, add_points_number, color, temp_path
+                    src_doc, start_page, end_page, points_number, target_nets, summary, add_points_number, color, fontsize, temp_path
                 )
                 temp_files.append(temp_path)
 
@@ -430,6 +435,7 @@ class HighlighterModel:
         summary: dict,
         add_points_number: bool,
         color: Tuple[float, float, float],
+        fontsize: float,
         temp_path: Path,
     ) -> None:
         """Processes a single page range and saves it to a temp path.
@@ -454,6 +460,7 @@ class HighlighterModel:
                 summary,
                 add_points_number=add_points_number,
                 color=color,
+                fontsize=fontsize
             )
 
         batch_doc.save(temp_path, garbage=1)

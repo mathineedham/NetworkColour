@@ -29,6 +29,17 @@ class HighlighterController:
         self.view.browse_txt_btn.config(command=self.handle_browse_txt)
         self.view.go_btn.config(command=self.handle_go)
         self.view.info_btn.bind("<Button-1>", lambda event: self.handle_show_info())
+        self.view.test_points_checkbox.config(command=self.toggle_font_size_state)
+        self.toggle_font_size_state()
+    
+    def toggle_font_size_state(self) -> None:
+        """!
+        @brief Enables or disables the font size spinbox based on checkbox state.
+        """
+        if self.view.test_points_var.get():
+            self.view.font_size_spinbox.config(state="normal")
+        else:
+            self.view.font_size_spinbox.config(state="disabled")
     
     def handle_browse_pdf(self) -> None:
         """!
@@ -61,6 +72,10 @@ class HighlighterController:
         self.model.include_test_points = self.view.test_points_var.get()
         selected_color = self.view.get_selected_rgb_normalized()
         add_points = self.view.test_points_var.get()
+        try:
+            font_size = float(self.view.font_size_var.get())
+        except Exception:
+            font_size = 10.0
 
         is_valid, err_msg = self.model.validate_inputs()
         if not is_valid:
@@ -72,7 +87,7 @@ class HighlighterController:
 
         def run_process():
             try:
-                success, result_msg = self.model.process_pdf(add_points_number=self.model.include_test_points, color=selected_color)
+                success, result_msg = self.model.process_pdf(add_points_number=self.model.include_test_points, color=selected_color, fontsize=font_size)
                 self.view.after(
                     0, lambda: self.view.log_message(result_msg, is_error=not success)
                 )

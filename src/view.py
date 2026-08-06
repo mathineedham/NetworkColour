@@ -104,17 +104,33 @@ class HighlighterView(tk.Tk):
         controls_frame = ttk.Frame(parent)
         controls_frame.pack(fill=tk.X, pady=(0, 10))
 
+        # Checkbox for test point numbers
         self.test_points_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
+        self.test_points_checkbox = ttk.Checkbutton(
             controls_frame,
             text="with test point numbers",
             variable=self.test_points_var,
-        ).pack(side=tk.LEFT, padx=(0, 15))
+        )
+        self.test_points_checkbox.pack(side=tk.LEFT, padx=(0, 10))
+        # Font size selection
 
+        ttk.Label(controls_frame, text="Font Size:").pack(side=tk.LEFT, padx=(0, 5))
+        self.font_size_var = tk.IntVar(value=10)
+        self.font_size_spinbox = ttk.Spinbox(
+            controls_frame,
+            from_=1,
+            to=100,
+            textvariable=self.font_size_var,
+            width=4,
+            state="disabled"
+        )
+        
+        self.font_size_spinbox.pack(side=tk.LEFT, padx=(0, 15))
+        # Execution button
         self.go_btn = ttk.Button(controls_frame, text="Go")
         self.go_btn.pack(side=tk.LEFT)
 
-
+        # Color selection circles
         color_frame = ttk.Frame(controls_frame)
         color_frame.pack(side=tk.LEFT, fill=tk.Y)
 
