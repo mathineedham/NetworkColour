@@ -56,7 +56,7 @@ python -m unittest discover -s tests
   - **With test points:** Net name and test point number separated by a semicolon (e.g., `NET_A;101`).
 
 ### Formatting and search rules
-1. **Exact Case Sensitivity:** Search matching is strictly case-sensitive. For example, `aBc` will **not** match `ABC` in the PDF.
+1. **Case Insensitivity:** Search matching is non case-sensitive. For example, `aBc` will match `ABC` in the PDF.
 2. **Forbidden Characters:** Net names cannot contain spaces, brackets, or standard punctuation: `( ) [ ] { } < > " , ;`.
 3. **Active-Low Signals (`~` Prefix):** Prefixing a net name with `~` (e.g., `~RESET`) will only match nets that have a physical line (overline) drawn directly above them in the PDF graphics layer.
 4. **Multiple Test Points:** When test points are enabled, separate multiple points for a single net using commas (e.g., `NET_A;tp1,tp2,30`). Semicolons are strictly reserved for separating the net name from its test points.

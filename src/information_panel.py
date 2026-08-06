@@ -112,7 +112,7 @@ class InfoWindow(tk.Toplevel):
         notes_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=(5, 0))
 
         notes = [
-            "1. Case Sensitivity: Matching is exact. 'aBc' will NOT match 'ABC' in the PDF.",
+            "1. Case Insensitivity: Matching is not case-sensitive. 'aBc' will match 'ABC' in the PDF.",
             "2. Special Characters: Network names cannot contain spaces, brackets, or punctuation: ( ) [ ] { } < > \" , ;",
             "3. Active-Low Signals (~ Prefix): Prefixing a net name with '~' (e.g., ~RESET) will only match nets that have a physical line (overline) drawn above them in the PDF.",
             "4. Output File: A new PDF named '<original_name>_highlighted.pdf' will be saved in the same directory as your source PDF.",

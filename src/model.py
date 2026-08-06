@@ -95,7 +95,7 @@ class HighlighterModel:
 
             if not add_points_number:
                 self._validate_no_points_line(line, line_idx, txt_path.name)
-                raw_nets.append(line)
+                raw_nets.append(line.upper())
             else:
                 net, pt = self._parse_points_line(line, line_idx, txt_path.name)
                 if net in points_number.keys():
@@ -166,7 +166,7 @@ class HighlighterModel:
                 f"Invalid character '{found_invalid[0]}' found in net name '{net}'."
             )
 
-        return net, pt
+        return net.upper(), pt
 
     @staticmethod
     def is_valid_boundary(char: str) -> bool:
@@ -301,7 +301,7 @@ class HighlighterModel:
                 dir_vector = line.get("dir", (1.0, 0.0))
 
                 for span in line.get("spans", []):
-                    span_text = span.get("text", "")
+                    span_text = span.get("text", "").upper()
                     if not span_text:
                         continue
 
